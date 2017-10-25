@@ -1,0 +1,1145 @@
+#include<iostream>                                         //get sprites back in there!!!!!!!!!
+using namespace std;
+#include <allegro5/allegro.h>
+#include<allegro5\allegro_image.h>
+#include <allegro5/allegro_font.h>
+#include <allegro5\allegro_audio.h>
+#include <allegro5\allegro_acodec.h>
+#include <allegro5/allegro_image.h>
+#include <allegro5/allegro_primitives.h>
+#include <allegro5/allegro_ttf.h>
+#include <stdio.h>
+
+class baddie {
+public:
+	void initMonster();
+	void tap();
+
+private:
+	string name;
+
+};
+
+class Bricks {
+public:
+	bool collision(int player_x, int player_y, int player_h, int player_w);
+	void constructor();
+	void initBrick(int x, int y, int w, int h);
+	void draw(int xShift);
+	bool isDead();
+	void killBrick();
+private:
+	int xCoordinate;
+	int yCoordinate;
+	int width;
+	int height;
+	bool Death;
+};
+
+class coins {
+public:
+	bool collision(int bouncer_x, int bouncer_y, int bouncer_h, int bouncer_w);
+	void constructor();
+	void initcoins(int x, int y, int w, int h);
+	void draw();
+	bool isDead();
+	void killcoins();
+
+private:
+	int xCoordinate;
+	int yCoordinate;
+	int width;
+	int height;
+	bool Death;
+};
+
+const float FPS = 60;
+const int SCREEN_W = 800;
+const int SCREEN_H = 675;
+const int player_SIZE = 32;
+const int GROUND = 545;
+
+//collision detection function
+int playerCollidedWithGround(int y);
+//this isn't working yet :'(
+int playerCollidedWithPlatform(int PlayerX, int PlayerY, int PlayerWidth, int PlayerHeight, int PlatformX1, int PlatformX2, int PlatformY);
+int collision(int b1x, int b1y, int b1w, int b1h, int b2x, int b2y, int b2w, int b2h);
+
+enum MYKEYS {
+	KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_Q, KEY_ENTER, KEY_SPACE
+};
+enum STATES { INTRO, GAMEPLAY, PAUSE, DEAD }; //intro is 0, gameplay is 1, pause is 2, dead is 3
+
+
+
+
+int main()
+{
+	ALLEGRO_DISPLAY *display = NULL;
+	ALLEGRO_EVENT_QUEUE *event_queue = NULL;
+	ALLEGRO_TIMER *timer = NULL;
+	//ALLEGRO_BITMAP *player = NULL;
+	ALLEGRO_BITMAP *player1 = NULL;
+	ALLEGRO_BITMAP *player2 = NULL;
+	ALLEGRO_BITMAP *Plat1 = NULL;
+	ALLEGRO_FONT *font = NULL;
+	ALLEGRO_FONT *font2 = NULL;
+	ALLEGRO_SAMPLE *sound = NULL;
+	ALLEGRO_SAMPLE_INSTANCE *instance3 = NULL;
+	ALLEGRO_SAMPLE *sample3 = NULL;//sample= background music
+	int state = INTRO;
+	int coins = 0;
+	double time = 1000;
+
+	//create variables to hold background
+	ALLEGRO_BITMAP *background = NULL;
+	//these two variables hold the x and y positions of the player
+	//initalize these variables to where you want your player to start
+	float player_x = 50;
+	float player_y = 50;
+
+	float Plat1x = 100;
+	float Plat1y = 400;
+
+	// velocity (in x and y, which means the speed we're going in each orthogonal direction)
+	float dx = 0;
+	float dy = 0;
+
+	// to keep track if the player can jump again so he doesn't perform another jump midair
+	bool mayJumpAgain = false;
+
+	// is true if the player is on the ground
+	bool isOnSolidGround = false;
+
+
+	bool isPaused = false;
+
+	//here's our key states. they're all starting as "false" because nothing has been pressed yet.
+	//the first slot represents "up", then "down", "left" and "right"
+	bool key[7] = { false, false, false, false, false, false, false };
+
+	//don't redraw until an event happens
+	bool redraw = true;
+
+	//this controls our game loop
+	bool doexit = false;
+
+	char direction = 'r';
+
+	const int maxFrame = 5;
+
+	int curFrame = 0;
+
+	int frameCount = 0;
+
+	int frameDelay = 5;
+
+	int frameWidth = 62;
+	int frameHeight = 62;
+
+	int worldwidth = 11106;
+	int worldheight = 671;
+
+	// camera's position
+
+	int cameraX = 0;
+	int cameraY = 0;
+
+	al_init();
+
+	//get the keyboard ready to use
+	al_install_keyboard();
+
+	al_init_image_addon();
+
+	al_init_font_addon();
+
+	al_init_ttf_addon();
+	al_install_audio();
+	al_init_acodec_addon();
+	al_reserve_samples(10);
+	al_init_primitives_addon();
+	font = al_load_ttf_font("MARIOO.ttf", 50, 0);
+	font2 = al_load_ttf_font("MARIO.ttf", 50, 0);
+	timer = al_create_timer(1.0 / FPS);
+
+	display = al_create_display(SCREEN_W, SCREEN_H);
+
+	player1 = al_load_bitmap("Toad.png");
+
+	sample3 = al_load_sample("._theme.wav");
+	player2 = al_load_bitmap("otherToad.png");
+	//player = al_create_bitmap(32, 32);
+
+	background = al_load_bitmap("background2.jpg");
+
+	//al_set_target_bitmap(player);
+	instance3 = al_create_sample_instance(sample3);
+
+	al_set_sample_instance_playmode(instance3, ALLEGRO_PLAYMODE_LOOP);
+
+	al_attach_sample_instance_to_mixer(instance3, al_get_default_mixer());
+
+	al_play_sample_instance(instance3);
+
+	al_clear_to_color(al_map_rgb(255, 255, 255));
+
+
+	Plat1 = al_create_bitmap(80, 32);
+
+	al_set_target_bitmap(Plat1);
+
+	al_clear_to_color(al_map_rgb(255, 20, 80));
+
+	al_set_target_bitmap(al_get_backbuffer(display));
+
+	event_queue = al_create_event_queue();
+
+	//these lines tell teh event source what to look for
+	al_register_event_source(event_queue, al_get_display_event_source(display));
+
+	al_register_event_source(event_queue, al_get_timer_event_source(timer));
+
+	//new! tell the event queue that it should take keyboard events, too 
+	al_register_event_source(event_queue, al_get_keyboard_event_source());
+
+	//////////////////////////////al_clear_to_color(al_map_rgb(0, 0, 0));
+
+	al_flip_display();
+
+	al_start_timer(timer);
+
+	Bricks brick1;
+	brick1.initBrick(840, 408, 46, 46);
+	Bricks brick2;
+	brick2.initBrick(840, 408, 46, 46);
+	Bricks brick3;
+	brick3.initBrick(840, 408, 46, 46);
+	Bricks brick4;
+	brick4.initBrick(840, 408, 46, 46);
+	Bricks brick5;
+	brick5.initBrick(840, 408, 46, 46);
+	Bricks brick6;
+	brick6.initBrick(840, 408, 46, 46);
+	Bricks brick7;
+	brick7.initBrick(840, 408, 46, 46);
+	Bricks brick8;
+	brick8.initBrick(840, 408, 46, 46);
+	Bricks brick9;
+	brick9.initBrick(840, 408, 46, 46);
+	Bricks brick10;
+	brick10.initBrick(840, 408, 46, 46);
+	Bricks brick11;
+	brick11.initBrick(840, 408, 46, 46);
+	Bricks brick12;
+	brick12.initBrick(840, 408, 46, 46);
+	Bricks brick13;
+	brick13.initBrick(840, 408, 46, 46);
+	Bricks brick14;
+	brick14.initBrick(840, 408, 46, 46);
+	Bricks brick15;
+	brick15.initBrick(840, 408, 46, 46);
+	Bricks brick16;
+	brick16.initBrick(840, 408, 46, 46);
+	Bricks brick17;
+	brick17.initBrick(840, 408, 46, 46);
+	Bricks brick18;
+	brick18.initBrick(840, 408, 46, 46);
+	Bricks brick19;
+	brick19.initBrick(840, 408, 46, 46);
+	Bricks brick20;
+	brick20.initBrick(840, 408, 46, 46);
+	Bricks brick21;
+	brick21.initBrick(840, 408, 46, 46);
+	Bricks brick22;
+	brick22.initBrick(840, 408, 46, 46);
+	Bricks brick23;
+	brick23.initBrick(840, 408, 46, 46);
+	Bricks brick24;
+	brick24.initBrick(840, 408, 46, 46);
+	Bricks brick25;
+	brick25.initBrick(840, 408, 46, 46);
+	Bricks brick26;
+	brick26.initBrick(840, 408, 46, 46);
+	Bricks brick27;
+	brick27.initBrick(840, 408, 46, 46);
+	Bricks brick28;
+	brick28.initBrick(840, 408, 46, 46);
+	Bricks brick29;
+	brick29.initBrick(840, 408, 46, 46);
+	Bricks brick30;
+	brick30.initBrick(840, 408, 46, 46);
+	Bricks brick31;
+	brick31.initBrick(840, 408, 46, 46);
+	Bricks brick32;
+	brick32.initBrick(840, 408, 46, 46);
+	Bricks brick33;
+	brick33.initBrick(840, 408, 46, 46);
+	Bricks brick34;
+	brick34.initBrick(840, 408, 46, 46);
+	Bricks brick35;
+	brick35.initBrick(840, 408, 46, 46);
+	Bricks brick36;
+	brick36.initBrick(840, 408, 46, 46);
+	Bricks brick37;
+	brick37.initBrick(840, 408, 46, 46);
+	Bricks brick38;
+	brick38.initBrick(840, 408, 46, 46);
+	Bricks brick39;
+	brick39.initBrick(840, 408, 46, 46);
+	Bricks brick40;
+	brick40.initBrick(840, 408, 46, 46);
+	Bricks brick41;
+	brick41.initBrick(840, 408, 46, 46);
+	Bricks brick42;
+	brick42.initBrick(840, 408, 46, 46);
+	Bricks brick43;
+	brick43.initBrick(840, 408, 46, 46);
+	Bricks brick44;
+	brick44.initBrick(840, 408, 46, 46);
+
+	//so the game loop is set to act on "ticks" of the timer OR keyboard presses 
+	//OR the mouse closing the display
+	while (!doexit)
+	{
+		cout << "state is " << state;
+		if (isOnSolidGround)
+			cout << "on solid ground" << endl;
+
+		ALLEGRO_EVENT ev;
+		al_wait_for_event(event_queue, &ev);
+
+
+		if (ev.type == ALLEGRO_EVENT_TIMER) {
+
+
+			//state  handling
+
+			if (state == INTRO) {
+				if (key[5] == true)
+					state = GAMEPLAY;
+				cout << "state is intro" << endl;
+
+
+			}
+			if (state == PAUSE) {
+				if (key[5] == true)
+					state = GAMEPLAY;
+			}
+
+			if (state == GAMEPLAY) {
+				time = time - .05;//modify this to change timer speed
+				cout << "gameplay state" << endl;
+				if (key[4])
+					state = PAUSE;
+
+				//algorithm for moving (the up arrow)
+				if (isOnSolidGround) {
+					//friction: slow down by 10% each game loop
+					//this is also the "stopping" mechanism- eventually it slows to *basically* zero
+					dx *= .1;
+					//if the up button is pressed
+					if (key[0]) {
+						if (mayJumpAgain) {
+							//make your y direction go "up" by 10 pixels
+							dy = -15;
+							//no double jumping
+							mayJumpAgain = false;
+						}
+					}
+					else
+						mayJumpAgain = true;
+				}//end if on solid ground
+
+
+
+
+				 /*if (key[KEY_UP] && player_y >= 4.0 && !isPaused) {
+				 player_y -= 4.0;
+				 }*/
+
+
+				 //if (key[KEY_DOWN] && player_y <= worldheight - player_SIZE - 4.0 && !isPaused) {
+				 //	player_y += 4.0;
+				 //}
+
+				if (key[KEY_LEFT] && player_x >= 4.0 && !isPaused) {
+					direction = 'l';
+					player_x -= 4.0;
+					dx = -2;
+				}
+
+
+				if (key[KEY_RIGHT] && player_x <= worldwidth - player_SIZE - 4.0 && !isPaused) {
+					direction = 'r';
+					player_x += 4.0;
+					dx = 2;
+				}
+
+				//gravity
+				//if we're not on solid ground, we should be falling (remember, positive y is "down")
+				if (!isOnSolidGround) {
+					dy += .5;
+				}
+
+				//put a cap on how fast you can fall
+				if (dy > 5)
+					dy = 5;
+
+				//here's where your box's coordinates are acutally updated
+				player_x += dx;
+				player_y += dy;
+
+				//here's my check to stop my player from walking off the window
+				/*if (player_x > 640 - 30)
+				player_x = 640 - 30;
+				if (player_x < 0)
+				player_x = 0;*/
+
+				//this is basically a collision detection function
+				//if we've collided with the bottom of the screen, change the velocity to 0, flip the flag
+				if (playerCollidedWithGround(player_y)) {
+					player_y > GROUND - 62;  //480 - 30
+					dy = 0;
+					isOnSolidGround = true;
+				}
+				else
+					isOnSolidGround = false;
+
+				//if (playerCollidedWithPlatform(player_x, player_y, 32, 32, Plat1x, 80, Plat1y)) {
+
+				//	}
+				if (collision(player_x, player_y, 62, 62, Plat1x, Plat1y, 40, 40)) {
+					//player_x = 480 - 30;//you're warping here
+					dy = 0;
+					isOnSolidGround = true;
+				}
+
+
+				//collision code use later
+				//int x = object.x - cameraX;
+				//int y = object.y - cameraY;
+
+				//camera follows
+				cameraX = player_x - SCREEN_W / 2;
+				//cameraY = player_Y - SCREEN_H / 2;
+
+
+
+				//camera ends at map
+				if (cameraX < 0)
+					cameraX = 0;
+				if (cameraY < 0)
+					cameraY = 0;
+				if (cameraX > worldwidth - SCREEN_W)
+					cameraX = worldwidth - SCREEN_W;
+				if (cameraY > worldwidth - SCREEN_H)
+					cameraY = worldwidth - SCREEN_H;
+
+
+			}
+
+
+			if (++frameCount >= frameDelay)
+			{
+				//these two lines reset the image to the first after you cycle through all 10
+				if (++curFrame >= maxFrame)
+					curFrame = 0;
+
+				//as soon as you enter this branch and do the code, reset the "timer"
+				frameCount = 0;
+			}
+			//end states
+
+
+
+			//redraw at every tick of the timer
+			redraw = true;
+		}
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////////
+		else if (ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
+			break;
+		}
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////
+		//here's the algorithm that turns key presses into events
+		//a "key down" event is when a key is pushed
+		//while a "key up" event is when a key is released
+
+		//has something been pressed on the keyboard?
+		else if (ev.type == ALLEGRO_EVENT_KEY_DOWN) {
+
+			//"keycode" holds all the different keys on the keyboard
+			switch (ev.keyboard.keycode) {
+
+				//if the up key has been pressed
+			case ALLEGRO_KEY_UP:
+				key[0] = true;
+				break;
+
+				//if the down key has been pressed
+			case ALLEGRO_KEY_DOWN:
+				key[1] = true;
+				break;
+
+				//if the left key has been pressed
+			case ALLEGRO_KEY_LEFT:
+				key[2] = true;
+				break;
+
+				//if the right key has been pressed
+			case ALLEGRO_KEY_RIGHT:
+				key[3] = true;
+				break;
+			case ALLEGRO_KEY_Q:
+				key[4] = true;
+				break;
+			case ALLEGRO_KEY_ENTER:
+				key[5] = true;
+				break;
+			case ALLEGRO_KEY_SPACE:
+				key[6] = true;
+				break;
+			}
+		}
+		//has something been released on the keyboard?
+		else if (ev.type == ALLEGRO_EVENT_KEY_UP) {
+			switch (ev.keyboard.keycode) {
+			case ALLEGRO_KEY_UP:
+				key[0] = false;
+				break;
+
+			case ALLEGRO_KEY_DOWN:
+				key[1] = false;
+				break;
+
+
+
+			case ALLEGRO_KEY_LEFT:
+				key[2] = false;
+				break;
+
+			case ALLEGRO_KEY_RIGHT:
+				key[3] = false;
+				break;
+
+			case ALLEGRO_KEY_Q:
+				key[4] = false;
+				break;
+			case ALLEGRO_KEY_ENTER:
+				key[5] = false;
+				break;
+
+			case ALLEGRO_KEY_SPACE:
+				key[6] = false;
+				break;
+				//kill the program if someone presses escape
+			case ALLEGRO_KEY_ESCAPE:
+				doexit = true;
+				break;
+			}
+		}
+
+
+		//RENDER SECTION
+
+		if (redraw && al_is_event_queue_empty(event_queue)) {
+			redraw = false;
+			al_clear_to_color(al_map_rgb(0, 0, 0));
+
+			if (state == INTRO) {
+				al_draw_textf(font, al_map_rgb(255, 0, 0), 250, 180, ALLEGRO_ALIGN_LEFT, "Mario 1-1", NULL);
+				al_draw_textf(font, al_map_rgb(255, 255, 255), 105, 280, ALLEGRO_ALIGN_LEFT, "Press Enter to Play", NULL);
+				al_draw_textf(font2, al_map_rgb(255, 0, 0), 10, 390, ALLEGRO_ALIGN_LEFT, "ABCDEFGHIJ", NULL);
+
+				cout << "drawing intro" << endl;
+			}
+
+			else if (state == GAMEPLAY) {
+
+				cout << "drawing gameplay" << endl;
+				al_draw_bitmap_region(background, cameraX, cameraY, SCREEN_W, SCREEN_H, 0, 0, 0);
+
+				if (direction == 'r')
+					al_draw_bitmap_region(player1, curFrame*frameWidth, 0, frameWidth, frameHeight, player_x - cameraX, player_y, 0);
+
+				if (direction == 'l')
+					al_draw_bitmap_region(player2, curFrame*frameWidth, 0, frameWidth, frameHeight, player_x - cameraX, player_y, 0);
+
+				al_draw_textf(font, al_map_rgb(255, 255, 255), 350, 50, ALLEGRO_ALIGN_LEFT, "%i", static_cast<int>(time));
+				//al_draw_bitmap(player, player_x - cameraX, player_y, 0);
+				al_draw_bitmap(Plat1, Plat1x, Plat1y, 0);
+
+				if (!brick1.isDead()) {
+					cout << "pooooop" << endl;
+					brick1.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick1.collision(player_x, player_y, 50, 50) == 1 && !brick1.isDead()) {
+					cout << "killing brcik" << endl;
+					brick1.killBrick();
+				}
+				if (!brick2.isDead()) {
+					cout << "pooooop" << endl;
+					brick2.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick2.collision(player_x, player_y, 50, 50) == 1 && !brick2.isDead()) {
+					cout << "killing brcik" << endl;
+					brick2.killBrick();
+				}
+				if (!brick3.isDead()) {
+					cout << "pooooop" << endl;
+					brick3.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick3.collision(player_x, player_y, 50, 50) == 1 && !brick3.isDead()) {
+					cout << "killing brcik" << endl;
+					brick3.killBrick();
+				}
+				if (!brick4.isDead()) {
+					cout << "pooooop" << endl;
+					brick4.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick4.collision(player_x, player_y, 50, 50) == 1 && !brick4.isDead()) {
+					cout << "killing brcik" << endl;
+					brick4.killBrick();
+				}
+				if (!brick5.isDead()) {
+					cout << "pooooop" << endl;
+					brick5.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick5.collision(player_x, player_y, 50, 50) == 1 && !brick5.isDead()) {
+					cout << "killing brcik" << endl;
+					brick5.killBrick();
+				}
+				if (!brick6.isDead()) {
+					cout << "pooooop" << endl;
+					brick6.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick6.collision(player_x, player_y, 50, 50) == 1 && !brick6.isDead()) {
+					cout << "killing brcik" << endl;
+					brick6.killBrick();
+				}
+				if (!brick7.isDead()) {
+					cout << "pooooop" << endl;
+					brick7.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick7.collision(player_x, player_y, 50, 50) == 1 && !brick7.isDead()) {
+					cout << "killing brcik" << endl;
+					brick7.killBrick();
+				}
+				if (!brick8.isDead()) {
+					cout << "pooooop" << endl;
+					brick8.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick8.collision(player_x, player_y, 50, 50) == 1 && !brick8.isDead()) {
+					cout << "killing brcik" << endl;
+					brick8.killBrick();
+				}
+				if (!brick9.isDead()) {
+					cout << "pooooop" << endl;
+					brick9.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick9.collision(player_x, player_y, 50, 50) == 1 && !brick9.isDead()) {
+					cout << "killing brcik" << endl;
+					brick9.killBrick();
+				}
+				if (!brick10.isDead()) {
+					cout << "pooooop" << endl;
+					brick10.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick10.collision(player_x, player_y, 50, 50) == 1 && !brick10.isDead()) {
+					cout << "killing brcik" << endl;
+					brick10.killBrick();
+				}
+				if (!brick11.isDead()) {
+					cout << "pooooop" << endl;
+					brick11.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick11.collision(player_x, player_y, 50, 50) == 1 && !brick11.isDead()) {
+					cout << "killing brcik" << endl;
+					brick11.killBrick();
+				}
+				if (!brick12.isDead()) {
+					cout << "pooooop" << endl;
+					brick12.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick12.collision(player_x, player_y, 50, 50) == 1 && !brick12.isDead()) {
+					cout << "killing brcik" << endl;
+					brick12.killBrick();
+				}
+				if (!brick13.isDead()) {
+					cout << "pooooop" << endl;
+					brick13.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick13.collision(player_x, player_y, 50, 50) == 1 && !brick13.isDead()) {
+					cout << "killing brcik" << endl;
+					brick13.killBrick();
+				}
+				if (!brick14.isDead()) {
+					cout << "pooooop" << endl;
+					brick14.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick14.collision(player_x, player_y, 50, 50) == 1 && !brick14.isDead()) {
+					cout << "killing brcik" << endl;
+					brick14.killBrick();
+				}
+				if (!brick15.isDead()) {
+					cout << "pooooop" << endl;
+					brick15.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick15.collision(player_x, player_y, 50, 50) == 1 && !brick15.isDead()) {
+					cout << "killing brcik" << endl;
+					brick15.killBrick();
+				}
+				if (!brick16.isDead()) {
+					cout << "pooooop" << endl;
+					brick16.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick16.collision(player_x, player_y, 50, 50) == 1 && !brick16.isDead()) {
+					cout << "killing brcik" << endl;
+					brick16.killBrick();
+				}
+				if (!brick17.isDead()) {
+					cout << "pooooop" << endl;
+					brick17.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick17.collision(player_x, player_y, 50, 50) == 1 && !brick17.isDead()) {
+					cout << "killing brcik" << endl;
+					brick17.killBrick();
+				}
+				if (!brick18.isDead()) {
+					cout << "pooooop" << endl;
+					brick18.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick18.collision(player_x, player_y, 50, 50) == 1 && !brick18.isDead()) {
+					cout << "killing brcik" << endl;
+					brick18.killBrick();
+				}
+				if (!brick19.isDead()) {
+					cout << "pooooop" << endl;
+					brick19.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick19.collision(player_x, player_y, 50, 50) == 1 && !brick19.isDead()) {
+					cout << "killing brcik" << endl;
+					brick19.killBrick();
+				}
+				if (!brick20.isDead()) {
+					cout << "pooooop" << endl;
+					brick20.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick20.collision(player_x, player_y, 50, 50) == 1 && !brick20.isDead()) {
+					cout << "killing brcik" << endl;
+					brick20.killBrick();
+				}
+				if (!brick21.isDead()) {
+					cout << "pooooop" << endl;
+					brick21.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick21.collision(player_x, player_y, 50, 50) == 1 && !brick21.isDead()) {
+					cout << "killing brcik" << endl;
+					brick21.killBrick();
+				}
+
+				if (!brick22.isDead()) {
+					cout << "pooooop" << endl;
+					brick22.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick22.collision(player_x, player_y, 50, 50) == 1 && !brick22.isDead()) {
+					cout << "killing brcik" << endl;
+					brick22.killBrick();
+				}
+				if (!brick23.isDead()) {
+					cout << "pooooop" << endl;
+					brick23.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick23.collision(player_x, player_y, 50, 50) == 1 && !brick23.isDead()) {
+					cout << "killing brcik" << endl;
+					brick23.killBrick();
+				}
+				if (!brick24.isDead()) {
+					cout << "pooooop" << endl;
+					brick24.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick24.collision(player_x, player_y, 50, 50) == 1 && !brick24.isDead()) {
+					cout << "killing brcik" << endl;
+					brick24.killBrick();
+				}
+				if (!brick25.isDead()) {
+					cout << "pooooop" << endl;
+					brick25.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick25.collision(player_x, player_y, 50, 50) == 1 && !brick25.isDead()) {
+					cout << "killing brcik" << endl;
+					brick25.killBrick();
+				}
+				if (!brick26.isDead()) {
+					cout << "pooooop" << endl;
+					brick26.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick26.collision(player_x, player_y, 50, 50) == 1 && !brick26.isDead()) {
+					cout << "killing brcik" << endl;
+					brick26.killBrick();
+				}
+				if (!brick27.isDead()) {
+					cout << "pooooop" << endl;
+					brick27.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick27.collision(player_x, player_y, 50, 50) == 1 && !brick27.isDead()) {
+					cout << "killing brcik" << endl;
+					brick27.killBrick();
+				}
+				if (!brick28.isDead()) {
+					cout << "pooooop" << endl;
+					brick28.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick28.collision(player_x, player_y, 50, 50) == 1 && !brick28.isDead()) {
+					cout << "killing brcik" << endl;
+					brick28.killBrick();
+				}
+				if (!brick29.isDead()) {
+					cout << "pooooop" << endl;
+					brick29.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick29.collision(player_x, player_y, 50, 50) == 1 && !brick29.isDead()) {
+					cout << "killing brcik" << endl;
+					brick29.killBrick();
+				}
+				if (!brick30.isDead()) {
+					cout << "pooooop" << endl;
+					brick30.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick30.collision(player_x, player_y, 50, 50) == 1 && !brick30.isDead()) {
+					cout << "killing brcik" << endl;
+					brick30.killBrick();
+				}
+				if (!brick31.isDead()) {
+					cout << "pooooop" << endl;
+					brick31.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick31.collision(player_x, player_y, 50, 50) == 1 && !brick31.isDead()) {
+					cout << "killing brcik" << endl;
+					brick31.killBrick();
+				}
+				if (!brick32.isDead()) {
+					cout << "pooooop" << endl;
+					brick32.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick32.collision(player_x, player_y, 50, 50) == 1 && !brick32.isDead()) {
+					cout << "killing brcik" << endl;
+					brick32.killBrick();
+				}
+				if (!brick33.isDead()) {
+					cout << "pooooop" << endl;
+					brick33.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick33.collision(player_x, player_y, 50, 50) == 1 && !brick33.isDead()) {
+					cout << "killing brcik" << endl;
+					brick33.killBrick();
+				}
+				if (!brick34.isDead()) {
+					cout << "pooooop" << endl;
+					brick34.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick34.collision(player_x, player_y, 50, 50) == 1 && !brick34.isDead()) {
+					cout << "killing brcik" << endl;
+					brick34.killBrick();
+				}
+				if (!brick35.isDead()) {
+					cout << "pooooop" << endl;
+					brick35.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick35.collision(player_x, player_y, 50, 50) == 1 && !brick35.isDead()) {
+					cout << "killing brcik" << endl;
+					brick35.killBrick();
+				}
+				if (!brick36.isDead()) {
+					cout << "pooooop" << endl;
+					brick36.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick36.collision(player_x, player_y, 50, 50) == 1 && !brick36.isDead()) {
+					cout << "killing brcik" << endl;
+					brick36.killBrick();
+				}
+				if (!brick37.isDead()) {
+					cout << "pooooop" << endl;
+					brick37.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick37.collision(player_x, player_y, 50, 50) == 1 && !brick37.isDead()) {
+					cout << "killing brcik" << endl;
+					brick37.killBrick();
+				}
+				if (!brick38.isDead()) {
+					cout << "pooooop" << endl;
+					brick38.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick38.collision(player_x, player_y, 50, 50) == 1 && !brick38.isDead()) {
+					cout << "killing brcik" << endl;
+					brick38.killBrick();
+				}
+				if (!brick39.isDead()) {
+					cout << "pooooop" << endl;
+					brick39.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick39.collision(player_x, player_y, 50, 50) == 1 && !brick39.isDead()) {
+					cout << "killing brcik" << endl;
+					brick39.killBrick();
+				}
+				if (!brick40.isDead()) {
+					cout << "pooooop" << endl;
+					brick40.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick40.collision(player_x, player_y, 50, 50) == 1 && !brick40.isDead()) {
+					cout << "killing brcik" << endl;
+					brick40.killBrick();
+				}
+				if (!brick41.isDead()) {
+					cout << "pooooop" << endl;
+					brick41.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick41.collision(player_x, player_y, 50, 50) == 1 && !brick41.isDead()) {
+					cout << "killing brcik" << endl;
+					brick41.killBrick();
+				}
+				if (!brick42.isDead()) {
+					cout << "pooooop" << endl;
+					brick42.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick42.collision(player_x, player_y, 50, 50) == 1 && !brick42.isDead()) {
+					cout << "killing brcik" << endl;
+					brick42.killBrick();
+				}
+				if (!brick43.isDead()) {
+					cout << "pooooop" << endl;
+					brick43.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick43.collision(player_x, player_y, 50, 50) == 1 && !brick43.isDead()) {
+					cout << "killing brcik" << endl;
+					brick43.killBrick();
+				}
+				if (!brick44.isDead()) {
+					cout << "pooooop" << endl;
+					brick44.draw(cameraX);
+
+				}
+				cout << "buuuuurrrp" << endl;
+				if (brick44.collision(player_x, player_y, 50, 50) == 1 && !brick44.isDead()) {
+					cout << "killing brcik" << endl;
+					brick44.killBrick();
+				}
+			}
+
+
+			else if (state == PAUSE) {
+				//paint black over the old screen, so the old player dissapears
+				cout << "drawing pause screen" << endl;
+				al_draw_textf(font, al_map_rgb(255, 255, 255), 275, 280, ALLEGRO_ALIGN_LEFT, "Paused...", NULL);
+				al_draw_textf(font, al_map_rgb(255, 255, 255), 375, 380, ALLEGRO_ALIGN_LEFT, "to unpause press enter again", NULL);
+
+			}
+
+
+			al_flip_display();
+		}
+	}
+
+
+	al_destroy_bitmap(player1);
+	al_destroy_bitmap(player2);
+	al_destroy_timer(timer);
+	al_destroy_display(display);
+	al_destroy_event_queue(event_queue);
+
+	return 0;
+}
+
+
+int playerCollidedWithGround(int y)
+{
+	if (y > GROUND) {
+		//  collision
+		//cout << "collision!" << endl;
+		return 1;
+	}
+
+	else
+		// no collision
+		return 0;
+}
+
+int playerCollidedWithPlatform(int PlayerX, int PlayerY, int PlayerWidth, int PlayerHeight, int PlatformX1, int PlatformX2, int PlatformY)
+{
+	if ((PlayerY + PlayerHeight < PlatformY) && (PlayerY + PlayerHeight + 3 > PlatformY) && (PlayerX + PlayerWidth < PlatformX1) && (PlayerX > PlatformX2)) {
+
+
+
+		cout << "collision!" << endl;
+		return 1;
+	}
+	else
+		// no collision
+		return 0;
+}
+int collision(int b1x, int b1y, int b1w, int b1h, int b2x, int b2y, int b2w, int b2h) {
+
+	if ((b1x > b2x + b2w) || //is box1 to the right of box2
+		(b1x + b1w < b2x) || //is box1 to the LEFT of box2
+		(b1y > b2y + b2h) || //is box1 below box2
+		(b1y + b1h < b2y)) //is box1 above box2
+		return 0;
+
+	else {
+		cout << "collision!";
+		return 1;
+	}
+}
+
+
+void baddie::tap() {}
+void baddie::initMonster() {}
+
+bool Bricks::collision(int player_x, int player_y, int player_h, int player_w) {
+	if ((player_x > xCoordinate + width) ||
+		(player_y > yCoordinate + height) ||
+		(player_x + player_w < xCoordinate) ||
+		(player_y + player_h  < yCoordinate))
+		return 0;
+	else
+		return 1;
+
+}
+void Bricks::constructor() {
+	xCoordinate = 0;
+	yCoordinate = 0;
+	width = 0;
+	height = 0;
+	Death = 0;
+}
+void Bricks::initBrick(int x, int y, int w, int h) {
+	xCoordinate = x;
+	yCoordinate = y;
+	width = w;
+	height = h;
+	Death = 0;
+}
+void Bricks::draw(int xShift) {
+	cout << "inside draw function" << endl;
+	al_draw_filled_rectangle(xCoordinate - xShift, yCoordinate, width + xCoordinate - xShift, height + yCoordinate, al_map_rgb(1, 1, 1));
+}
+
+bool Bricks::isDead() {
+	return Death;
+	cout << "flag";
+}
+void Bricks::killBrick() {
+	Death = 1;
+}
+void coins::constructor() {
+	xCoordinate = 0;
+	yCoordinate = 0;
+	width = 0;
+	height = 0;
+	Death = 0;
+}
+void coins::initcoins(int x, int y, int w, int h) {
+	xCoordinate = x;
+	yCoordinate = y;
+	width = w;
+	height = h;
+	Death = 0;
+}
+void coins::draw() {
+	al_draw_filled_rectangle(xCoordinate, yCoordinate, width + xCoordinate, height + yCoordinate,
+		al_map_rgb(255, 255, 0));
+}
+bool coins::isDead() {
+	return Death;
+}
+void coins::killcoins() {
+	Death = 1;
+}
